@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import logging
 import re
 import uuid
 
@@ -39,12 +40,16 @@ URGENCY_TO_PRIORITY: dict[UrgencyLevel, int] = {
 }
 
 
+logger = logging.getLogger(__name__)
+
+
 def extract_incident_from_text(message: str) -> IncidentExtractionResult:
     """Extract structured incident fields using Gemini API, falling back locally if unavailable."""
     if settings.gemini_api_key.strip():
         try:
             return _extract_with_gemini(message)
         except Exception as exc:
+            logger.warning("Gemini extraction failed (%s: %s); falling back locally.", type(exc).__name__, exc)
             fallback = _local_fallback_extract(message)
             fallback.uncertainty_notes = (
                 f"{fallback.uncertainty_notes} (Gemini unavailable: {type(exc).__name__}; used local fallback.)"
