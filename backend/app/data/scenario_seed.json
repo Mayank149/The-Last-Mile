@@ -1,0 +1,272 @@
+{
+  "scenario_name": "Bengaluru Urban Flood Simulation (Synthetic)",
+  "disclaimer": "SYNTHETIC SCENARIO: All emergency reports, rescue teams, shelters, and road disruptions are simulated for decision-support demonstration. Not for real emergency operations.",
+  "travel_time_note": "Modelled estimates based on OSM road lengths and documented assumed speeds by road class (not live traffic data).",
+  "teams": [
+    {
+      "id": "team-1",
+      "name": "Alpha Boat & Flood Unit",
+      "coordinates": { "lat": 12.9348, "lon": 77.6245 },
+      "availability": "available",
+      "capacity": 3,
+      "capabilities": ["boat_rescue", "evacuation", "assessment"],
+      "assigned_incident_ids": []
+    },
+    {
+      "id": "team-2",
+      "name": "Bravo Medical Response",
+      "coordinates": { "lat": 12.9296, "lon": 77.6202 },
+      "availability": "available",
+      "capacity": 2,
+      "capabilities": ["medical_aid", "assessment"],
+      "assigned_incident_ids": []
+    },
+    {
+      "id": "team-3",
+      "name": "Charlie Swift-Water & Evacuation",
+      "coordinates": { "lat": 12.9388, "lon": 77.6306 },
+      "availability": "available",
+      "capacity": 3,
+      "capabilities": ["boat_rescue", "evacuation", "food_water"],
+      "assigned_incident_ids": []
+    },
+    {
+      "id": "team-4",
+      "name": "Delta Relief & Logistics",
+      "coordinates": { "lat": 12.9262, "lon": 77.6328 },
+      "availability": "available",
+      "capacity": 4,
+      "capabilities": ["food_water", "shelter", "evacuation", "assessment"],
+      "assigned_incident_ids": []
+    },
+    {
+      "id": "team-5",
+      "name": "Echo Rapid Assessment",
+      "coordinates": { "lat": 12.9412, "lon": 77.6195 },
+      "availability": "busy",
+      "capacity": 2,
+      "capabilities": ["assessment", "medical_aid"],
+      "assigned_incident_ids": []
+    }
+  ],
+  "shelters": [
+    {
+      "id": "shelter-1",
+      "name": "Koramangala Indoor Stadium Relief Camp (Simulated)",
+      "coordinates": { "lat": 12.9342, "lon": 77.6254 },
+      "capacity": 250,
+      "simulated_occupancy": 110
+    },
+    {
+      "id": "shelter-2",
+      "name": "NGV Community Hall Shelter (Simulated)",
+      "coordinates": { "lat": 12.9395, "lon": 77.6285 },
+      "capacity": 180,
+      "simulated_occupancy": 95
+    },
+    {
+      "id": "shelter-3",
+      "name": "St. John's Auditorium Medical & Relief Point (Simulated)",
+      "coordinates": { "lat": 12.9288, "lon": 77.6208 },
+      "capacity": 150,
+      "simulated_occupancy": 60
+    },
+    {
+      "id": "shelter-4",
+      "name": "Kendriya Sadan Assembly Shelter (Simulated)",
+      "coordinates": { "lat": 12.9316, "lon": 77.6226 },
+      "capacity": 120,
+      "simulated_occupancy": 40
+    }
+  ],
+  "incidents": [
+    {
+      "id": "inc-101",
+      "original_message": "Knee-to-waist water rising inside ground-floor homes near Ejipura Main Road cross. Elderly couple unable to climb stairs.",
+      "incident_type": "stranded_persons",
+      "need_type": "boat_rescue",
+      "urgency": "critical",
+      "priority_score": 9,
+      "required_capability": "boat_rescue",
+      "estimated_demand": 1,
+      "vulnerable_indicators": ["elderly", "ground_floor_trapped"],
+      "location_hint": "Ejipura Main Road cross",
+      "uncertainty_notes": "Exact house number not stated; operator verified street junction.",
+      "coordinates": { "lat": 12.9415, "lon": 77.6272 },
+      "confidence": 0.88,
+      "verification": "verified",
+      "status": "open",
+      "extraction_source": "synthetic_seed"
+    },
+    {
+      "id": "inc-102",
+      "original_message": "Dialysis patient stranded on 1st floor in Koramangala 4th Block near Sony World junction; power out since 5am.",
+      "incident_type": "medical_emergency",
+      "need_type": "medical_aid",
+      "urgency": "critical",
+      "priority_score": 10,
+      "required_capability": "medical_aid",
+      "estimated_demand": 1,
+      "vulnerable_indicators": ["medical_dependency", "power_outage"],
+      "location_hint": "Koramangala 4th Block near Sony World junction",
+      "uncertainty_notes": "Verified landmark proximity.",
+      "coordinates": { "lat": 12.9362, "lon": 77.6268 },
+      "confidence": 0.92,
+      "verification": "verified",
+      "status": "open",
+      "extraction_source": "synthetic_seed"
+    },
+    {
+      "id": "inc-103",
+      "original_message": "Waterlogging blocking 80 Feet Road approach near Koramangala 6th Block; 2 families requesting evacuation to stadium.",
+      "incident_type": "flooding",
+      "need_type": "evacuation",
+      "urgency": "high",
+      "priority_score": 7,
+      "required_capability": "evacuation",
+      "estimated_demand": 1,
+      "vulnerable_indicators": ["families_requesting_evacuation"],
+      "location_hint": "80 Feet Road, Koramangala 6th Block",
+      "uncertainty_notes": "Road depth estimated by caller.",
+      "coordinates": { "lat": 12.9384, "lon": 77.6216 },
+      "confidence": 0.85,
+      "verification": "verified",
+      "status": "open",
+      "extraction_source": "synthetic_seed"
+    },
+    {
+      "id": "inc-104",
+      "original_message": "Clean drinking water and baby food exhausted at apartment lane behind Koramangala 1st Block.",
+      "incident_type": "flooding",
+      "need_type": "food_water",
+      "urgency": "medium",
+      "priority_score": 5,
+      "required_capability": "food_water",
+      "estimated_demand": 1,
+      "vulnerable_indicators": ["infant_needs"],
+      "location_hint": "Koramangala 1st Block inner lane",
+      "uncertainty_notes": "Lane access may be slow due to standing water.",
+      "coordinates": { "lat": 12.9278, "lon": 77.6365 },
+      "confidence": 0.81,
+      "verification": "verified",
+      "status": "open",
+      "extraction_source": "synthetic_seed"
+    },
+    {
+      "id": "inc-105",
+      "original_message": "Transformer spark and flooded basement reported near 100 Feet Road, Koramangala 3rd Block.",
+      "incident_type": "infrastructure_damage",
+      "need_type": "assessment",
+      "urgency": "high",
+      "priority_score": 7,
+      "required_capability": "assessment",
+      "estimated_demand": 1,
+      "vulnerable_indicators": ["electrical_hazard"],
+      "location_hint": "100 Feet Road, Koramangala 3rd Block",
+      "uncertainty_notes": "Requires safety check before vehicle entry.",
+      "coordinates": { "lat": 12.9285, "lon": 77.6284 },
+      "confidence": 0.84,
+      "verification": "verified",
+      "status": "open",
+      "extraction_source": "synthetic_seed"
+    },
+    {
+      "id": "inc-106",
+      "original_message": "Caller says water entering low houses somewhere near Vivek Nagar / Ejipura border, call dropped before street name.",
+      "incident_type": "flooding",
+      "need_type": "assessment",
+      "urgency": "high",
+      "priority_score": 6,
+      "required_capability": "assessment",
+      "estimated_demand": 1,
+      "vulnerable_indicators": ["dropped_call"],
+      "location_hint": "Vivek Nagar / Ejipura border (ambiguous)",
+      "uncertainty_notes": "Ambiguous location; coordinates intentionally unresolved until operator verification.",
+      "coordinates": null,
+      "confidence": 0.42,
+      "verification": "unverified_location",
+      "status": "open",
+      "extraction_source": "synthetic_seed"
+    }
+  ],
+  "zones": [
+    {
+      "id": "zone-ejipura-north",
+      "name": "Zone A: Ejipura Low-Lying",
+      "description": "Dense residential lanes north of Inner Ring Road; prone to waterlogging and sparse reporting when power/network drops.",
+      "polygon": [
+        [12.9455, 77.6220],
+        [12.9455, 77.6340],
+        [12.9390, 77.6340],
+        [12.9390, 77.6220]
+      ],
+      "center": { "lat": 12.9422, "lon": 77.6280 },
+      "baseline_reporting_count": 1
+    },
+    {
+      "id": "zone-koramangala-4-6",
+      "name": "Zone B: Koramangala 4th & 6th Block",
+      "description": "Central commercial & residential grid around 80 Ft Road and Sony World Junction.",
+      "polygon": [
+        [12.9390, 77.6190],
+        [12.9390, 77.6300],
+        [12.9325, 77.6300],
+        [12.9325, 77.6190]
+      ],
+      "center": { "lat": 12.9357, "lon": 77.6245 },
+      "baseline_reporting_count": 2
+    },
+    {
+      "id": "zone-ngv-east",
+      "name": "Zone C: National Games Village & East",
+      "description": "Eastern pocket near NGV and Inner Ring Road; limited direct road crossings when main arterials flood.",
+      "polygon": [
+        [12.9420, 77.6300],
+        [12.9420, 77.6415],
+        [12.9325, 77.6415],
+        [12.9325, 77.6300]
+      ],
+      "center": { "lat": 12.9372, "lon": 77.6357 },
+      "baseline_reporting_count": 0
+    },
+    {
+      "id": "zone-koramangala-1-3",
+      "name": "Zone D: Koramangala 1st & 3rd Block",
+      "description": "Southern residential and arterial corridor along 100 Feet Road and Sarjapur Road.",
+      "polygon": [
+        [12.9325, 77.6260],
+        [12.9325, 77.6410],
+        [12.9230, 77.6410],
+        [12.9230, 77.6260]
+      ],
+      "center": { "lat": 12.9277, "lon": 77.6335 },
+      "baseline_reporting_count": 2
+    },
+    {
+      "id": "zone-stjohns-madiwala",
+      "name": "Zone E: St. John's & Madiwala Edge",
+      "description": "South-west hospital & transit corridor along Hosur Road.",
+      "polygon": [
+        [12.9325, 77.6125],
+        [12.9325, 77.6260],
+        [12.9230, 77.6260],
+        [12.9230, 77.6125]
+      ],
+      "center": { "lat": 12.9277, "lon": 77.6192 },
+      "baseline_reporting_count": 1
+    },
+    {
+      "id": "zone-adugodi-west",
+      "name": "Zone F: Koramangala 8th Block & Adugodi Edge",
+      "description": "North-west residential pocket; moderate connectivity, sparse incident reporting.",
+      "polygon": [
+        [12.9455, 77.6125],
+        [12.9455, 77.6220],
+        [12.9325, 77.6220],
+        [12.9325, 77.6125]
+      ],
+      "center": { "lat": 12.9390, "lon": 77.6172 },
+      "baseline_reporting_count": 0
+    }
+  ]
+}
