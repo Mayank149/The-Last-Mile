@@ -149,3 +149,80 @@ class ScenarioMetadata(BaseModel):
     node_count: int
     edge_count: int
     disrupted_edge_count: int = 0
+
+
+class RoadDisruptionRequest(BaseModel):
+    edge_ids: list[str] = Field(..., min_length=1)
+    status: RoadStatus
+    apply_reverse: bool = True
+
+
+class SimulationRunRequest(BaseModel):
+    team_id: str | None = None
+    incident_id: str | None = None
+
+
+class RouteComparison(BaseModel):
+    team_id: str
+    team_name: str
+    incident_id: str
+    incident_label: str
+    reachable: bool
+    baseline_travel_time_sec: float | None = None
+    current_travel_time_sec: float | None = None
+    delta_sec: float | None = None
+    distance_m: float | None = None
+    route_status: Literal["unchanged", "detoured_or_delayed", "unreachable"]
+    path_coords: list[list[float]] = Field(default_factory=list)
+    used_edge_ids: list[str] = Field(default_factory=list)
+    note: str = ""
+
+
+class SimulationResult(BaseModel):
+    disrupted_edge_count: int
+    blocked_edge_count: int
+    degraded_edge_count: int
+    reachable_pairs: int
+    unreachable_pairs: int
+    delayed_or_detoured_pairs: int
+    travel_time_note: str
+    routes: list[RouteComparison]
+
+
+class IncidentExtractRequest(BaseModel):
+    message: str = Field(..., min_length=5, max_length=2000)
+
+
+class IncidentExtractionResult(BaseModel):
+    original_message: str
+    incident_type: IncidentType
+    need_type: NeedType
+    urgency: UrgencyLevel
+    priority_score: int = Field(..., ge=1, le=10)
+    required_capability: str
+    estimated_demand: int = Field(default=1, ge=1, le=10)
+    vulnerable_indicators: list[str] = Field(default_factory=list)
+    location_hint: str = ""
+    uncertainty_notes: str = ""
+    confidence: float = Field(..., ge=0.0, le=1.0)
+    coordinates: Coordinates | None = None
+    verification: VerificationStatus = VerificationStatus.UNVERIFIED_LOCATION
+    extraction_source: Literal["gemini", "local_fallback"]
+
+
+class IncidentCreateRequest(BaseModel):
+    original_message: str = Field(..., min_length=5, max_length=2000)
+    incident_type: IncidentType
+    need_type: NeedType
+    urgency: UrgencyLevel
+    priority_score: int = Field(default=5, ge=1, le=10)
+    required_capability: str | None = None
+    estimated_demand: int = Field(default=1, ge=1, le=10)
+    vulnerable_indicators: list[str] = Field(default_factory=list)
+    location_hint: str = ""
+    uncertainty_notes: str = ""
+    coordinates: Coordinates | None = None
+    confidence: float = Field(default=0.8, ge=0.0, le=1.0)
+    operator_confirmed: bool = True
+    extraction_source: Literal["gemini", "local_fallback", "manual"] = "manual"
+

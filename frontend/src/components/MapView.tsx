@@ -1,11 +1,15 @@
 import { useEffect, useRef } from "react";
 import L from "leaflet";
 import type {
+  AllocationAssignment,
+  Coordinates,
   Incident,
   RescueTeam,
   RoadEdge,
+  RouteComparison,
   Shelter,
   ZoneDefinition,
+  ZoneGapAssessment,
 } from "../types/domain";
 
 interface MapViewProps {
@@ -15,12 +19,20 @@ interface MapViewProps {
   teams: RescueTeam[];
   shelters: Shelter[];
   zones: ZoneDefinition[];
+  zoneGaps: ZoneGapAssessment[];
+  allocationAssignments: AllocationAssignment[];
+  activeRoute: RouteComparison | null;
+  selectedRoadId: string | null;
+  onSelectRoad: (edge: RoadEdge) => void;
+  pickingLocation: boolean;
+  onPickLocation: (coords: Coordinates) => void;
   layers: {
     roads: boolean;
     incidents: boolean;
     teams: boolean;
     shelters: boolean;
     zones: boolean;
+    routes: boolean;
   };
 }
 
@@ -38,6 +50,13 @@ export default function MapView({
   teams,
   shelters,
   zones,
+  zoneGaps,
+  allocationAssignments,
+  activeRoute,
+  selectedRoadId,
+  onSelectRoad,
+  pickingLocation,
+  onPickLocation,
   layers,
 }: MapViewProps) {
   const containerRef = useRef<HTMLDivElement | null>(null);
@@ -45,6 +64,7 @@ export default function MapView({
   const layerGroupsRef = useRef<{
     zones: L.LayerGroup;
     roads: L.LayerGroup;
+    routes: L.LayerGroup;
     shelters: L.LayerGroup;
     teams: L.LayerGroup;
     incidents: L.LayerGroup;
@@ -83,6 +103,7 @@ export default function MapView({
     layerGroupsRef.current = {
       zones: L.layerGroup().addTo(map),
       roads: L.layerGroup().addTo(map),
+      routes: L.layerGroup().addTo(map),
       shelters: L.layerGroup().addTo(map),
       teams: L.layerGroup().addTo(map),
       incidents: L.layerGroup().addTo(map),
@@ -97,27 +118,63 @@ export default function MapView({
     };
   }, [bbox.east, bbox.north, bbox.south, bbox.west]);
 
-  // Render Zones
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map) return;
+
+    const container = map.getContainer();
+    container.style.cursor = pickingLocation ? "crosshair" : "";
+
+    const handleClick = (e: L.LeafletMouseEvent) => {
+      if (!pickingLocation) return;
+      onPickLocation({
+        lat: Number(e.latlng.lat.toFixed(6)),
+        lon: Number(e.latlng.lng.toFixed(6)),
+      });
+    };
+
+    map.on("click", handleClick);
+    return () => {
+      map.off("click", handleClick);
+    };
+  }, [pickingLocation, onPickLocation]);
+
+  // Render Zones (colored by gap_level when gap assessment is available)
   useEffect(() => {
     const groups = layerGroupsRef.current;
     if (!groups) return;
     groups.zones.clearLayers();
     if (!layers.zones) return;
 
+    const gapById = new Map(zoneGaps.map((g) => [g.id, g]));
+
     for (const zone of zones) {
+      const gap = gapById.get(zone.id);
+      const fillColor =
+        gap?.gap_level === "high"
+          ? "#ef4444"
+          : gap?.gap_level === "moderate"
+          ? "#f59e0b"
+          : "#38bdf8";
+      const fillOpacity = gap?.gap_level === "high" ? 0.22 : gap?.gap_level === "moderate" ? 0.14 : 0.06;
+
+      const popupHtml = gap
+        ? `<strong>${zone.name}</strong><br/>` +
+          `Gap Score: <strong>${gap.gap_score}</strong> (${gap.gap_level.toUpperCase()})<br/>` +
+          `<small>${gap.contributing_factors.join("<br/>")}</small>`
+        : `<strong>${zone.name}</strong><br/><small>${zone.description}</small>`;
+
       L.polygon(zone.polygon, {
-        color: "#64748b",
-        weight: 1,
+        color: fillColor,
+        weight: 1.5,
         dashArray: "4 4",
-        fillColor: "#38bdf8",
-        fillOpacity: 0.06,
+        fillColor,
+        fillOpacity,
       })
-        .bindPopup(
-          `<strong>${zone.name}</strong><br/><small>${zone.description}</small>`
-        )
+        .bindPopup(popupHtml)
         .addTo(groups.zones);
     }
-  }, [zones, layers.zones]);
+  }, [zones, zoneGaps, layers.zones]);
 
   // Render Roads
   useEffect(() => {
@@ -127,21 +184,29 @@ export default function MapView({
     if (!layers.roads) return;
 
     for (const edge of roads) {
-      const color =
-        edge.status === "blocked"
-          ? "#ef4444"
-          : edge.status === "degraded"
-          ? "#f59e0b"
-          : "#38bdf8";
-      const weight = edge.status === "open" ? 2.5 : 4;
-      const opacity = edge.status === "open" ? 0.55 : 0.9;
+      const isSelected = edge.id === selectedRoadId;
+      const color = isSelected
+        ? "#e879f9"
+        : edge.status === "blocked"
+        ? "#ef4444"
+        : edge.status === "degraded"
+        ? "#f59e0b"
+        : "#38bdf8";
+      const weight = isSelected ? 6 : edge.status === "open" ? 2.5 : 4.5;
+      const opacity = isSelected ? 1.0 : edge.status === "open" ? 0.5 : 0.9;
 
-      L.polyline(edge.coords, {
+      const poly = L.polyline(edge.coords, {
         color,
         weight,
         opacity,
         dashArray: edge.status === "blocked" ? "6 6" : undefined,
-      })
+      });
+
+      poly.on("click", () => {
+        onSelectRoad(edge);
+      });
+
+      poly
         .bindPopup(
           `<strong>${edge.name}</strong><br/>` +
             `Class: ${edge.road_type} | Length: ${edge.length_m} m<br/>` +
@@ -149,7 +214,43 @@ export default function MapView({
         )
         .addTo(groups.roads);
     }
-  }, [roads, layers.roads]);
+  }, [roads, layers.roads, selectedRoadId, onSelectRoad]);
+
+  // Render Active Simulated Route & Allocation Assignment Routes
+  useEffect(() => {
+    const groups = layerGroupsRef.current;
+    if (!groups) return;
+    groups.routes.clearLayers();
+    if (!layers.routes) return;
+
+    for (const a of allocationAssignments) {
+      if (a.path_coords.length === 0) continue;
+      L.polyline(a.path_coords, {
+        color: "#a855f7",
+        weight: 4,
+        opacity: 0.8,
+        dashArray: "8 4",
+      })
+        .bindPopup(
+          `<strong>Proposed: ${a.team_name} → ${a.incident_id.toUpperCase()}</strong><br/>` +
+            `Modelled ETA: ${a.travel_time_sec}s<br/><small>${a.rationale}</small>`
+        )
+        .addTo(groups.routes);
+    }
+
+    if (activeRoute && activeRoute.reachable && activeRoute.path_coords.length > 0) {
+      L.polyline(activeRoute.path_coords, {
+        color: activeRoute.route_status === "detoured_or_delayed" ? "#facc15" : "#22c55e",
+        weight: 5.5,
+        opacity: 0.95,
+      })
+        .bindPopup(
+          `<strong>${activeRoute.team_name} → ${activeRoute.incident_label}</strong><br/>` +
+            `Modelled: ${activeRoute.current_travel_time_sec}s (Baseline: ${activeRoute.baseline_travel_time_sec}s)`
+        )
+        .addTo(groups.routes);
+    }
+  }, [activeRoute, allocationAssignments, layers.routes]);
 
   // Render Shelters
   useEffect(() => {
