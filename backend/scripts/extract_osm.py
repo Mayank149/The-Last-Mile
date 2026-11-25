@@ -56,22 +56,44 @@ def _estimate_travel_time_sec(length_m: float, road_type: str) -> float:
 
 def download_and_prepare_graph() -> dict:
     """Download driveable road network from OSM and convert to prepared JSON."""
+    ox.settings.requests_timeout = 60
+    ox.settings.overpass_rate_limit = False
+
+    endpoints = [
+        "https://overpass.private.coffee/api",
+        "https://maps.mail.ru/osm/tools/overpass/api",
+        "https://overpass-api.de/api",
+    ]
+
     ox_major = int(ox.__version__.split(".")[0])
-    if ox_major >= 2:
-        G = ox.graph_from_bbox(
-            bbox=(BBOX_WEST, BBOX_SOUTH, BBOX_EAST, BBOX_NORTH),
-            network_type="drive",
-            simplify=True,
-        )
-    else:
-        G = ox.graph_from_bbox(
-            north=BBOX_NORTH,
-            south=BBOX_SOUTH,
-            east=BBOX_EAST,
-            west=BBOX_WEST,
-            network_type="drive",
-            simplify=True,
-        )
+    G = None
+    last_err: Exception | None = None
+    for endpoint in endpoints:
+        try:
+            ox.settings.overpass_url = endpoint
+            print(f"Trying Overpass endpoint: {endpoint}", flush=True)
+            if ox_major >= 2:
+                G = ox.graph_from_bbox(
+                    bbox=(BBOX_WEST, BBOX_SOUTH, BBOX_EAST, BBOX_NORTH),
+                    network_type="drive",
+                    simplify=True,
+                )
+            else:
+                G = ox.graph_from_bbox(
+                    north=BBOX_NORTH,
+                    south=BBOX_SOUTH,
+                    east=BBOX_EAST,
+                    west=BBOX_WEST,
+                    network_type="drive",
+                    simplify=True,
+                )
+            break
+        except Exception as exc:
+            print(f"Endpoint {endpoint} failed: {exc}", flush=True)
+            last_err = exc
+
+    if G is None:
+        raise RuntimeError(f"All Overpass endpoints failed: {last_err}")
 
     # Keep the largest strongly connected component so routing is well-behaved
     if not nx.is_strongly_connected(G):
