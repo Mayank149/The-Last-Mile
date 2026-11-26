@@ -2,7 +2,10 @@
 
 from __future__ import annotations
 
-from ortools.linear_solver import pywraplp
+try:
+    from ortools.linear_solver import pywraplp
+except ImportError:
+    from ortools.linear_solver.python import pywraplp
 
 from app.models.domain import Incident, RescueTeam, VerificationStatus
 from app.modules.geospatial import RoadNetwork
@@ -15,7 +18,7 @@ PRIORITY_WEIGHT_SEC = 1000.0
 
 
 def run_allocation(
-    network: RoadNetwork,
+    network: RoadNtwork,
     teams: list[RescueTeam],
     incidents: list[Incident],
 ) -> dict:
