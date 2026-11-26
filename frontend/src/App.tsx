@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   applyRoadDisruption,
   fetchCoverageGaps,
@@ -11,6 +11,7 @@ import {
 } from "./api/client";
 import Header from "./components/Header";
 import Navigation from "./components/Navigation";
+import type { AnimationRoute } from "./components/MapView";
 import CoverageAllocationWorkspace from "./components/workspaces/CoverageAllocationWorkspace";
 import IntakeWorkspace from "./components/workspaces/IntakeWorkspace";
 import MapWorkspace from "./components/workspaces/MapWorkspace";
@@ -76,6 +77,11 @@ export default function App() {
     zones: true,
   });
 
+  // Animation State
+  const [animPlaying, setAnimPlaying] = useState(false);
+  const [animSpeed, setAnimSpeed] = useState(1);
+  const [animProgress, setAnimProgress] = useState(0);
+
   // Sync workspace with URL hash
   function handleSelectWorkspace(id: WorkspaceId) {
     setActiveWorkspace(id);
@@ -118,6 +124,73 @@ export default function App() {
     void loadAll();
   }, []);
 
+  // Auto-run simulation after scenario loads to populate routes for map animation
+  useEffect(() => {
+    if (!scenario || simulation) return;
+    void (async () => {
+      setBusy(true);
+      try {
+        const sim = await runSimulation();
+        setSimulation(sim);
+        if (sim.routes.length > 0) {
+          const delayed = sim.routes.find((r) => r.route_status === "detoured_or_delayed");
+          setActiveRoute(delayed ?? sim.routes[0]);
+        }
+        // Auto-start animation
+        setAnimPlaying(true);
+        setAnimProgress(0);
+      } finally {
+        setBusy(false);
+      }
+    })();
+  }, [scenario, simulation]);
+
+  // Compute animation routes from simulation + allocation
+  const animationRoutes: AnimationRoute[] = useMemo(() => {
+    const routes: AnimationRoute[] = [];
+
+    // Add simulation routes
+    if (simulation) {
+      for (const r of simulation.routes) {
+        if (!r.reachable || r.path_coords.length < 2) continue;
+        routes.push({
+          teamId: r.team_id,
+          teamName: r.team_name,
+          incidentId: r.incident_id,
+          incidentLabel: r.incident_label,
+          pathCoords: r.path_coords as [number, number][],
+          color: r.route_status === "detoured_or_delayed" ? "#facc15" : "#22c55e",
+          type: "simulation",
+        });
+      }
+    }
+
+    // Add allocation routes (if different teams/incidents from simulation)
+    if (allocation) {
+      const simKeys = new Set(routes.map((r) => `${r.teamId}-${r.incidentId}`));
+      for (const a of allocation.optimised.assignments) {
+        const key = `${a.team_id}-${a.incident_id}`;
+        if (simKeys.has(key)) continue;
+        if (a.path_coords.length < 2) continue;
+        routes.push({
+          teamId: a.team_id,
+          teamName: a.team_name,
+          incidentId: a.incident_id,
+          incidentLabel: a.incident_label,
+          pathCoords: a.path_coords as [number, number][],
+          color: "#a855f7",
+          type: "allocation",
+        });
+      }
+    }
+
+    return routes;
+  }, [simulation, allocation]);
+
+  const handleAnimationProgress = useCallback((progress: number) => {
+    setAnimProgress(progress);
+  }, []);
+
   async function handleReset() {
     setBusy(true);
     try {
@@ -132,6 +205,8 @@ export default function App() {
       setAllocation(null);
       setPickingLocationFor(null);
       setPickedDraftCoords(null);
+      setAnimPlaying(false);
+      setAnimProgress(0);
     } finally {
       setBusy(false);
     }
@@ -191,6 +266,9 @@ export default function App() {
         const delayed = sim.routes.find((r) => r.route_status === "detoured_or_delayed");
         setActiveRoute(delayed ?? sim.routes[0]);
       }
+      // Restart animation
+      setAnimProgress(0);
+      setAnimPlaying(true);
     } finally {
       setBusy(false);
     }
@@ -381,6 +459,17 @@ export default function App() {
               layers={layers}
               onToggleLayer={(key) => setLayers((prev) => ({ ...prev, [key]: !prev[key] }))}
               busy={busy}
+              animationRoutes={animationRoutes}
+              animationPlaying={animPlaying}
+              animationSpeed={animSpeed}
+              animationProgress={animProgress}
+              onTogglePlay={() => setAnimPlaying((prev) => !prev)}
+              onSetSpeed={setAnimSpeed}
+              onResetAnimation={() => {
+                setAnimProgress(0);
+                setAnimPlaying(true);
+              }}
+              onAnimationProgress={handleAnimationProgress}
             />
           )}
         </main>

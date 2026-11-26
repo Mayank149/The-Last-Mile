@@ -2441,6 +2441,181 @@ body,
 /* =========================================================================
    Responsive Breakpoints
    ========================================================================= */
+
+/* =========================================================================
+   Rescue Team Motion Animation
+   ========================================================================= */
+
+/* The Leaflet divIcon marker */
+.rescue-team-motion-icon {
+  background: none !important;
+  border: none !important;
+}
+
+.motion-marker-outer {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.motion-marker-ping {
+  position: absolute;
+  top: 0;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  background: var(--team-color, #3b82f6);
+  opacity: 0.3;
+  animation: team-ping 2s cubic-bezier(0, 0, 0.2, 1) infinite;
+  pointer-events: none;
+}
+
+@keyframes team-ping {
+  0% { transform: translateX(-50%) scale(0.8); opacity: 0.4; }
+  75%, 100% { transform: translateX(-50%) scale(2.2); opacity: 0; }
+}
+
+.motion-marker-dot {
+  position: relative;
+  z-index: 2;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  background: var(--team-color, #3b82f6);
+  border: 3px solid #ffffff;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.5), 0 0 20px var(--team-color, #3b82f6);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.motion-marker-label {
+  position: relative;
+  z-index: 2;
+  margin-top: 2px;
+  background: rgba(0, 0, 0, 0.85);
+  color: #ffffff;
+  font-size: 9px;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  padding: 1px 5px;
+  border-radius: 3px;
+  white-space: nowrap;
+  pointer-events: none;
+  text-transform: uppercase;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+}
+
+/* Animation Controls Floating Bar */
+.map-animation-controls {
+  position: absolute;
+  bottom: 80px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 900;
+  max-width: 650px;
+  width: calc(100% - 32px);
+}
+
+.anim-controls-inner {
+  background: rgba(15, 23, 42, 0.95);
+  backdrop-filter: blur(10px);
+  border: 1px solid var(--border-default);
+  border-radius: 10px;
+  padding: 8px 14px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  box-shadow: 0 6px 24px rgba(0, 0, 0, 0.5);
+}
+
+.anim-speed-controls {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.chip-speed {
+  padding: 2px 6px;
+  font-size: 10px;
+  font-weight: 700;
+  border-radius: 4px;
+  border: 1px solid var(--border-default);
+  background: var(--bg-surface-elevated);
+  color: var(--text-muted);
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.chip-speed:hover {
+  border-color: var(--accent-sky);
+  color: var(--text-main);
+}
+
+.chip-speed.active {
+  background: rgba(56, 189, 248, 0.2);
+  border-color: var(--accent-sky);
+  color: #ffffff;
+}
+
+.anim-progress-wrap {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 80px;
+}
+
+.anim-progress-bar {
+  flex: 1;
+  height: 5px;
+  background: var(--bg-surface-elevated);
+  border-radius: 999px;
+  overflow: hidden;
+}
+
+.anim-progress-fill {
+  height: 100%;
+  background: linear-gradient(90deg, #38bdf8, #22c55e);
+  border-radius: 999px;
+  transition: width 0.08s linear;
+}
+
+.anim-progress-label {
+  font-size: 10px;
+  font-weight: 700;
+  color: var(--text-muted);
+  min-width: 32px;
+  text-align: right;
+}
+
+.anim-route-count {
+  font-size: 11px;
+  color: var(--accent-sky);
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+/* Animated dot in legend */
+.dot-animated {
+  animation: dot-blink 1.4s ease-in-out infinite;
+  box-shadow: 0 0 6px currentColor;
+}
+
+@keyframes dot-blink {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.5; transform: scale(1.3); }
+}
+
+.legend-divider {
+  height: 1px;
+  background: var(--border-default);
+  margin: 2px 0;
+}
+
 @media (max-width: 1100px) {
   .metrics-grid {
     grid-template-columns: repeat(2, 1fr);
