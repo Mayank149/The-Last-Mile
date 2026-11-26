@@ -79,23 +79,52 @@ export default function MapView({
     const map = L.map(containerRef.current, {
       center: [centerLat, centerLon],
       zoom: 15,
-      zoomControl: true,
+      zoomControl: false,
     });
+
+    // Compact vertical map controls in the top-right corner
+    const zoomControl = L.control.zoom({
+      position: "topright",
+      zoomInTitle: "Zoom in",
+      zoomOutTitle: "Zoom out",
+    });
+    zoomControl.addTo(map);
+
+    // Re-center / reset view button in the same vertical control stack
+    const zoomContainer = zoomControl.getContainer();
+    if (zoomContainer) {
+      const resetBtn = L.DomUtil.create(
+        "a",
+        "leaflet-control-zoom-reset leaflet-bar-part",
+        zoomContainer
+      );
+      resetBtn.href = "#";
+      resetBtn.title = "Reset map view";
+      resetBtn.setAttribute("role", "button");
+      resetBtn.setAttribute("aria-label", "Reset map view");
+      resetBtn.innerHTML = `<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M3 12h3m12 0h3M12 3v3m0 12v3"/></svg>`;
+
+      L.DomEvent.on(resetBtn, "click", (e) => {
+        L.DomEvent.preventDefault(e);
+        L.DomEvent.stopPropagation(e);
+        map.setView([centerLat, centerLon], 15);
+      });
+    }
 
     L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
       attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
       maxZoom: 19,
     }).addTo(map);
 
+    // Single outside blue box covering the entire operational area
     L.rectangle(
       [
         [bbox.south, bbox.west],
         [bbox.north, bbox.east],
       ],
       {
-        color: "#38bdf8",
-        weight: 1.5,
-        dashArray: "6 4",
+        color: "#2563eb",
+        weight: 2,
         fill: false,
       }
     ).addTo(map);
@@ -150,41 +179,11 @@ export default function MapView({
     };
   }, [pickingLocation, onPickLocation]);
 
-  // Render Zones (colored by gap_level when gap assessment is available)
+  // Zones layer: cleared to prevent multiple inner boxes (retaining only the 1 outside blue boundary box)
   useEffect(() => {
     const groups = layerGroupsRef.current;
     if (!groups) return;
     groups.zones.clearLayers();
-    if (!layers.zones) return;
-
-    const gapById = new Map(zoneGaps.map((g) => [g.id, g]));
-
-    for (const zone of zones) {
-      const gap = gapById.get(zone.id);
-      const fillColor =
-        gap?.gap_level === "high"
-          ? "#ef4444"
-          : gap?.gap_level === "moderate"
-          ? "#f59e0b"
-          : "#38bdf8";
-      const fillOpacity = gap?.gap_level === "high" ? 0.22 : gap?.gap_level === "moderate" ? 0.14 : 0.06;
-
-      const popupHtml = gap
-        ? `<strong>${zone.name}</strong><br/>` +
-          `Gap Score: <strong>${gap.gap_score}</strong> (${gap.gap_level.toUpperCase()})<br/>` +
-          `<small>${gap.contributing_factors.join("<br/>")}</small>`
-        : `<strong>${zone.name}</strong><br/><small>${zone.description}</small>`;
-
-      L.polygon(zone.polygon, {
-        color: fillColor,
-        weight: 1.5,
-        dashArray: "4 4",
-        fillColor,
-        fillOpacity,
-      })
-        .bindPopup(popupHtml)
-        .addTo(groups.zones);
-    }
   }, [zones, zoneGaps, layers.zones]);
 
   // Render Roads
@@ -338,6 +337,79 @@ export default function MapView({
 
   return (
     <div className="map-container">
+      <style>{`
+        .map-container .leaflet-top.leaflet-right {
+          top: 16px;
+          right: 16px;
+          display: flex;
+          flex-direction: column;
+          align-items: flex-end;
+          gap: 6px;
+        }
+
+        .map-container .leaflet-control-zoom.leaflet-bar {
+          background: rgba(15, 23, 42, 0.88);
+          backdrop-filter: blur(16px) saturate(180%);
+          -webkit-backdrop-filter: blur(16px) saturate(180%);
+          border: 1px solid rgba(255, 255, 255, 0.1);
+          border-radius: 12px;
+          padding: 3px;
+          display: flex;
+          flex-direction: column;
+          gap: 3px;
+          box-shadow: 0 12px 30px -4px rgba(0, 0, 0, 0.45), 0 4px 12px -2px rgba(0, 0, 0, 0.25), inset 0 1px 0 rgba(255, 255, 255, 0.08);
+          overflow: hidden;
+          margin: 0;
+        }
+
+        .map-container .leaflet-control-zoom.leaflet-bar a {
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          width: 34px;
+          height: 34px;
+          line-height: 34px;
+          background: rgba(30, 41, 59, 0.45);
+          color: #cbd5e1;
+          font-size: 16px;
+          font-weight: 500;
+          text-decoration: none;
+          border: 1px solid rgba(255, 255, 255, 0.06);
+          border-radius: 8px;
+          transition: all 0.15s cubic-bezier(0.4, 0, 0.2, 1);
+          cursor: pointer;
+          user-select: none;
+        }
+
+        .map-container .leaflet-control-zoom.leaflet-bar a:hover {
+          background: rgba(51, 65, 85, 0.7);
+          border-color: rgba(255, 255, 255, 0.18);
+          color: #38bdf8;
+          transform: translateY(-1px);
+          box-shadow: 0 3px 8px rgba(0, 0, 0, 0.25);
+        }
+
+        .map-container .leaflet-control-zoom.leaflet-bar a:active {
+          background: rgba(15, 23, 42, 0.95);
+          transform: translateY(0);
+          color: #ffffff;
+        }
+
+        .map-container .leaflet-control-zoom.leaflet-bar a.leaflet-disabled {
+          background: rgba(15, 23, 42, 0.4);
+          color: #475569;
+          cursor: not-allowed;
+          border-color: rgba(255, 255, 255, 0.03);
+          transform: none;
+          box-shadow: none;
+        }
+
+        .map-container .leaflet-control-zoom.leaflet-bar a svg {
+          display: block;
+          stroke: currentColor;
+          transition: stroke 0.15s ease;
+        }
+      `}</style>
       <div ref={containerRef} style={{ height: "100%", width: "100%" }} />
       <div className="map-legend">
         <strong>Map Legend (Synthetic Overlay)</strong>
