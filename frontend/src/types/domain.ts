@@ -7,6 +7,7 @@ export type UrgencyLevel = "critical" | "high" | "medium" | "low";
 export type VerificationStatus = "verified" | "unverified_location" | "pending_review";
 export type IncidentStatus = "open" | "assigned" | "resolved";
 export type RoadStatus = "open" | "degraded" | "blocked";
+export type WorkspaceId = "overview" | "operations" | "intake" | "coverage-allocation" | "map";
 
 export interface Incident {
   id: string;
