@@ -1,7 +1,14 @@
+import type { CSSProperties } from "react";
 import {
   Layers,
   MapPin,
   X,
+  Route,
+  Navigation,
+  AlertTriangle,
+  Users,
+  Building2,
+  Square,
 } from "lucide-react";
 import MapView from "../MapView";
 import type {
@@ -45,6 +52,20 @@ interface MapWorkspaceProps {
   onToggleLayer: (layerKey: keyof MapWorkspaceProps["layers"]) => void;
   busy: boolean;
 }
+
+const LAYER_ITEMS: {
+  key: keyof MapWorkspaceProps["layers"];
+  label: string;
+  icon: typeof Route;
+  activeColor: string;
+}[] = [
+  { key: "roads", label: "Roads", icon: Route, activeColor: "#38bdf8" },
+  { key: "routes", label: "Routes", icon: Navigation, activeColor: "#a855f7" },
+  { key: "incidents", label: "Incidents", icon: AlertTriangle, activeColor: "#f97316" },
+  { key: "teams", label: "Teams", icon: Users, activeColor: "#3b82f6" },
+  { key: "shelters", label: "Shelters", icon: Building2, activeColor: "#10b981" },
+  { key: "zones", label: "Zones", icon: Square, activeColor: "#60a5fa" },
+];
 
 export default function MapWorkspace({
   bbox,
@@ -93,20 +114,136 @@ export default function MapWorkspace({
       {/* Floating Map Controls Bar */}
       <div className="map-floating-bar">
         {/* Layer Toggles */}
-        <div className="map-layer-toggles">
+        <div className="map-layer-toggles" role="toolbar" aria-label="Map layer toggles">
+          <style>{`
+            .map-floating-bar .map-layer-toggles {
+              background: rgba(15, 23, 42, 0.88);
+              backdrop-filter: blur(16px) saturate(180%);
+              -webkit-backdrop-filter: blur(16px) saturate(180%);
+              border: 1px solid rgba(255, 255, 255, 0.1);
+              border-radius: 12px;
+              padding: 4px 6px;
+              display: inline-flex;
+              align-items: center;
+              gap: 4px;
+              box-shadow: 0 12px 30px -4px rgba(0, 0, 0, 0.45), 0 4px 12px -2px rgba(0, 0, 0, 0.25), inset 0 1px 0 rgba(255, 255, 255, 0.08);
+            }
+
+            .map-floating-bar .layer-bar-label {
+              display: inline-flex;
+              align-items: center;
+              gap: 5px;
+              font-size: 11px;
+              font-weight: 700;
+              letter-spacing: 0.06em;
+              text-transform: uppercase;
+              color: #94a3b8;
+              padding: 0 4px 0 6px;
+              user-select: none;
+            }
+
+            .map-floating-bar .layer-bar-icon {
+              color: #38bdf8;
+              opacity: 0.9;
+            }
+
+            .map-floating-bar .layer-bar-divider {
+              display: inline-block;
+              width: 1px;
+              height: 16px;
+              background: rgba(255, 255, 255, 0.12);
+              margin: 0 3px 0 1px;
+            }
+
+            .map-floating-bar .layer-chip-btn {
+              display: inline-flex;
+              align-items: center;
+              gap: 6px;
+              padding: 5px 10px;
+              font-size: 11.5px;
+              font-weight: 500;
+              border-radius: 8px;
+              border: 1px solid rgba(255, 255, 255, 0.07);
+              background: rgba(30, 41, 59, 0.45);
+              color: #94a3b8;
+              cursor: pointer;
+              transition: all 0.15s cubic-bezier(0.4, 0, 0.2, 1);
+              line-height: 1;
+              white-space: nowrap;
+              user-select: none;
+            }
+
+            .map-floating-bar .layer-chip-btn:hover {
+              background: rgba(51, 65, 85, 0.7);
+              border-color: rgba(255, 255, 255, 0.16);
+              color: #f8fafc;
+              transform: translateY(-1px);
+              box-shadow: 0 3px 8px rgba(0, 0, 0, 0.25);
+            }
+
+            .map-floating-bar .layer-chip-btn:active {
+              transform: translateY(0);
+            }
+
+            .map-floating-bar .layer-chip-btn.active {
+              background: rgba(15, 23, 42, 0.95);
+              border-color: rgba(255, 255, 255, 0.18);
+              color: #ffffff;
+              font-weight: 600;
+              box-shadow: 0 2px 8px -1px rgba(0, 0, 0, 0.35), inset 0 1px 0 rgba(255, 255, 255, 0.12);
+            }
+
+            .map-floating-bar .layer-chip-btn .layer-chip-icon {
+              color: #64748b;
+              transition: color 0.15s ease, transform 0.15s ease;
+              flex-shrink: 0;
+            }
+
+            .map-floating-bar .layer-chip-btn:hover .layer-chip-icon {
+              color: #cbd5e1;
+            }
+
+            .map-floating-bar .layer-chip-btn.active .layer-chip-icon {
+              color: var(--layer-color, #38bdf8);
+            }
+
+            .map-floating-bar .layer-chip-btn .layer-chip-dot {
+              width: 5px;
+              height: 5px;
+              border-radius: 50%;
+              background: rgba(148, 163, 184, 0.35);
+              transition: all 0.15s ease;
+              flex-shrink: 0;
+            }
+
+            .map-floating-bar .layer-chip-btn.active .layer-chip-dot {
+              background: var(--layer-color, #38bdf8);
+              box-shadow: 0 0 6px var(--layer-color, #38bdf8);
+            }
+          `}</style>
           <span className="layer-bar-label">
-            <Layers size={13} />
-            <span>Layers:</span>
+            <Layers size={13} className="layer-bar-icon" />
+            <span>Layers</span>
           </span>
-          {(Object.keys(layers) as (keyof typeof layers)[]).map((layerKey) => (
-            <button
-              key={layerKey}
-              className={`chip chip-layer ${layers[layerKey] ? "active" : ""}`}
-              onClick={() => onToggleLayer(layerKey)}
-            >
-              {layerKey}
-            </button>
-          ))}
+          <span className="layer-bar-divider" aria-hidden="true" />
+          {LAYER_ITEMS.map(({ key, label, icon: Icon, activeColor }) => {
+            const isActive = layers[key];
+            return (
+              <button
+                key={key}
+                type="button"
+                className={`layer-chip-btn ${isActive ? "active" : ""}`}
+                style={{ "--layer-color": activeColor } as CSSProperties}
+                onClick={() => onToggleLayer(key)}
+                aria-pressed={isActive}
+                title={`Toggle ${label} layer (${isActive ? "Visible" : "Hidden"})`}
+              >
+                <Icon size={12} className="layer-chip-icon" />
+                <span className="layer-chip-label">{label}</span>
+                <span className="layer-chip-dot" />
+              </button>
+            );
+          })}
         </div>
 
         {/* Active Route Pill if route selected */}
