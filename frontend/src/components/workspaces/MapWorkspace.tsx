@@ -11,6 +11,7 @@ import {
   Square,
 } from "lucide-react";
 import MapView from "../MapView";
+import type { AnimationRoute } from "../MapView";
 import type {
   AllocationAssignment,
   Coordinates,
@@ -51,6 +52,7 @@ interface MapWorkspaceProps {
   };
   onToggleLayer: (layerKey: keyof MapWorkspaceProps["layers"]) => void;
   busy: boolean;
+  animationRoutes: AnimationRoute[];
 }
 
 const LAYER_ITEMS: {
@@ -87,6 +89,7 @@ export default function MapWorkspace({
   layers,
   onToggleLayer,
   busy,
+  animationRoutes,
 }: MapWorkspaceProps) {
   const isPicking = pickingLocationFor !== null;
 
@@ -338,6 +341,7 @@ export default function MapWorkspace({
           pickingLocation={isPicking}
           onPickLocation={onMapPickLocation}
           layers={layers}
+          animationRoutes={animationRoutes}
         />
       </div>
     </div>
