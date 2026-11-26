@@ -3,10 +3,6 @@ import {
   Layers,
   MapPin,
   X,
-  Play,
-  Pause,
-  RotateCcw,
-  Gauge,
   Route,
   Navigation,
   AlertTriangle,
@@ -57,13 +53,6 @@ interface MapWorkspaceProps {
   onToggleLayer: (layerKey: keyof MapWorkspaceProps["layers"]) => void;
   busy: boolean;
   animationRoutes: AnimationRoute[];
-  animationPlaying: boolean;
-  animationSpeed: number;
-  animationProgress: number;
-  onTogglePlay: () => void;
-  onSetSpeed: (speed: number) => void;
-  onResetAnimation: () => void;
-  onAnimationProgress: (progress: number) => void;
 }
 
 const LAYER_ITEMS: {
@@ -101,13 +90,6 @@ export default function MapWorkspace({
   onToggleLayer,
   busy,
   animationRoutes,
-  animationPlaying,
-  animationSpeed,
-  animationProgress,
-  onTogglePlay,
-  onSetSpeed,
-  onResetAnimation,
-  onAnimationProgress,
 }: MapWorkspaceProps) {
   const isPicking = pickingLocationFor !== null;
 
@@ -285,59 +267,6 @@ export default function MapWorkspace({
         )}
       </div>
 
-      {/* Floating Animation Controls */}
-      {animationRoutes.length > 0 && (
-        <div className="map-animation-controls">
-          <div className="anim-controls-inner">
-            <button
-              className={`btn btn-xs ${animationPlaying ? "btn-warn" : "btn-ok"}`}
-              onClick={onTogglePlay}
-              title={animationPlaying ? "Pause animation" : "Play animation"}
-            >
-              {animationPlaying ? <Pause size={13} /> : <Play size={13} />}
-              <span>{animationPlaying ? "Pause" : "Play"}</span>
-            </button>
-
-            <button
-              className="btn btn-xs btn-secondary"
-              onClick={onResetAnimation}
-              title="Reset to start"
-            >
-              <RotateCcw size={12} />
-            </button>
-
-            <div className="anim-speed-controls">
-              <Gauge size={12} className="text-muted" />
-              {[0.5, 1, 2, 3].map((s) => (
-                <button
-                  key={s}
-                  className={`chip chip-speed ${animationSpeed === s ? "active" : ""}`}
-                  onClick={() => onSetSpeed(s)}
-                >
-                  {s}x
-                </button>
-              ))}
-            </div>
-
-            <div className="anim-progress-wrap">
-              <div className="anim-progress-bar">
-                <div
-                  className="anim-progress-fill"
-                  style={{ width: `${Math.min(animationProgress * 100, 100)}%` }}
-                />
-              </div>
-              <span className="anim-progress-label">
-                {Math.round(animationProgress * 100)}%
-              </span>
-            </div>
-
-            <span className="anim-route-count">
-              {animationRoutes.length} team{animationRoutes.length !== 1 ? "s" : ""} en route
-            </span>
-          </div>
-        </div>
-      )}
-
       {/* Floating Selected Road Disruption Card */}
       {selectedRoad && (
         <div className="map-floating-road-card">
@@ -413,10 +342,6 @@ export default function MapWorkspace({
           onPickLocation={onMapPickLocation}
           layers={layers}
           animationRoutes={animationRoutes}
-          animationPlaying={animationPlaying}
-          animationSpeed={animationSpeed}
-          animationProgress={animationProgress}
-          onAnimationProgress={onAnimationProgress}
         />
       </div>
     </div>

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   applyRoadDisruption,
   fetchCoverageGaps,
@@ -77,11 +77,6 @@ export default function App() {
     zones: true,
   });
 
-  // Animation State
-  const [animPlaying, setAnimPlaying] = useState(false);
-  const [animSpeed, setAnimSpeed] = useState(1);
-  const [animProgress, setAnimProgress] = useState(0);
-
   // Sync workspace with URL hash
   function handleSelectWorkspace(id: WorkspaceId) {
     setActiveWorkspace(id);
@@ -136,42 +131,38 @@ export default function App() {
           const delayed = sim.routes.find((r) => r.route_status === "detoured_or_delayed");
           setActiveRoute(delayed ?? sim.routes[0]);
         }
-        // Auto-start animation
-        setAnimPlaying(true);
-        setAnimProgress(0);
       } finally {
         setBusy(false);
       }
     })();
   }, [scenario, simulation]);
 
-  // Compute animation routes from simulation + allocation
+  // Compute one distinct animation route per rescue team so teams spread across the map
   const animationRoutes: AnimationRoute[] = useMemo(() => {
     const routes: AnimationRoute[] = [];
+    const assignedTeams = new Set<string>();
+    const coveredIncidents = new Set<string>();
 
-    // Add simulation routes
-    if (simulation) {
-      for (const r of simulation.routes) {
-        if (!r.reachable || r.path_coords.length < 2) continue;
-        routes.push({
-          teamId: r.team_id,
-          teamName: r.team_name,
-          incidentId: r.incident_id,
-          incidentLabel: r.incident_label,
-          pathCoords: r.path_coords as [number, number][],
-          color: r.route_status === "detoured_or_delayed" ? "#facc15" : "#22c55e",
-          type: "simulation",
-        });
-      }
+    // 1. Honor the currently highlighted route first if selected
+    if (activeRoute && activeRoute.reachable && activeRoute.path_coords.length >= 2) {
+      routes.push({
+        teamId: activeRoute.team_id,
+        teamName: activeRoute.team_name,
+        incidentId: activeRoute.incident_id,
+        incidentLabel: activeRoute.incident_label,
+        pathCoords: activeRoute.path_coords as [number, number][],
+        color: activeRoute.route_status === "detoured_or_delayed" ? "#facc15" : "#22c55e",
+        type: "simulation",
+        travelTimeSec: activeRoute.current_travel_time_sec ?? activeRoute.baseline_travel_time_sec ?? 120,
+      });
+      assignedTeams.add(activeRoute.team_id);
+      coveredIncidents.add(activeRoute.incident_id);
     }
 
-    // Add allocation routes (if different teams/incidents from simulation)
+    // 2. Use optimised allocation assignments for teams (one route per team)
     if (allocation) {
-      const simKeys = new Set(routes.map((r) => `${r.teamId}-${r.incidentId}`));
       for (const a of allocation.optimised.assignments) {
-        const key = `${a.team_id}-${a.incident_id}`;
-        if (simKeys.has(key)) continue;
-        if (a.path_coords.length < 2) continue;
+        if (assignedTeams.has(a.team_id) || a.path_coords.length < 2) continue;
         routes.push({
           teamId: a.team_id,
           teamName: a.team_name,
@@ -180,16 +171,49 @@ export default function App() {
           pathCoords: a.path_coords as [number, number][],
           color: "#a855f7",
           type: "allocation",
+          travelTimeSec: a.travel_time_sec || 120,
         });
+        assignedTeams.add(a.team_id);
+        coveredIncidents.add(a.incident_id);
+      }
+    }
+
+    // 3. Assign remaining teams from simulation routes, preferring uncovered incidents
+    if (simulation) {
+      const byTeam = new Map<string, typeof simulation.routes>();
+      for (const r of simulation.routes) {
+        if (!r.reachable || r.path_coords.length < 2 || assignedTeams.has(r.team_id)) continue;
+        const list = byTeam.get(r.team_id) ?? [];
+        list.push(r);
+        byTeam.set(r.team_id, list);
+      }
+
+      for (const [teamId, teamRoutes] of byTeam.entries()) {
+        const sorted = [...teamRoutes].sort(
+          (a, b) =>
+            (a.current_travel_time_sec ?? Number.MAX_SAFE_INTEGER) -
+            (b.current_travel_time_sec ?? Number.MAX_SAFE_INTEGER)
+        );
+        const chosen = sorted.find((r) => !coveredIncidents.has(r.incident_id)) ?? sorted[0];
+        if (!chosen) continue;
+
+        routes.push({
+          teamId: chosen.team_id,
+          teamName: chosen.team_name,
+          incidentId: chosen.incident_id,
+          incidentLabel: chosen.incident_label,
+          pathCoords: chosen.path_coords as [number, number][],
+          color: chosen.route_status === "detoured_or_delayed" ? "#facc15" : "#22c55e",
+          type: "simulation",
+          travelTimeSec: chosen.current_travel_time_sec ?? chosen.baseline_travel_time_sec ?? 120,
+        });
+        assignedTeams.add(teamId);
+        coveredIncidents.add(chosen.incident_id);
       }
     }
 
     return routes;
-  }, [simulation, allocation]);
-
-  const handleAnimationProgress = useCallback((progress: number) => {
-    setAnimProgress(progress);
-  }, []);
+  }, [simulation, allocation, activeRoute]);
 
   async function handleReset() {
     setBusy(true);
@@ -205,8 +229,6 @@ export default function App() {
       setAllocation(null);
       setPickingLocationFor(null);
       setPickedDraftCoords(null);
-      setAnimPlaying(false);
-      setAnimProgress(0);
     } finally {
       setBusy(false);
     }
@@ -266,9 +288,6 @@ export default function App() {
         const delayed = sim.routes.find((r) => r.route_status === "detoured_or_delayed");
         setActiveRoute(delayed ?? sim.routes[0]);
       }
-      // Restart animation
-      setAnimProgress(0);
-      setAnimPlaying(true);
     } finally {
       setBusy(false);
     }
@@ -373,9 +392,18 @@ export default function App() {
           {activeWorkspace === "overview" && (
             <OverviewWorkspace
               scenario={scenario}
+              roads={roads}
               simulation={simulation}
               gaps={gaps}
               allocation={allocation}
+              selectedRoad={selectedRoad}
+              onSelectRoad={setSelectedRoad}
+              onDisruptRoad={handleDisruptRoad}
+              activeRoute={activeRoute}
+              onClearActiveRoute={() => setActiveRoute(null)}
+              layers={layers}
+              onToggleLayer={(key) => setLayers((prev) => ({ ...prev, [key]: !prev[key] }))}
+              animationRoutes={animationRoutes}
               onNavigate={handleSelectWorkspace}
               onSelectUrgencyFilter={(u) => setUrgencyFilter(u)}
               onRunSimulation={handleRunSimulation}
@@ -460,16 +488,6 @@ export default function App() {
               onToggleLayer={(key) => setLayers((prev) => ({ ...prev, [key]: !prev[key] }))}
               busy={busy}
               animationRoutes={animationRoutes}
-              animationPlaying={animPlaying}
-              animationSpeed={animSpeed}
-              animationProgress={animProgress}
-              onTogglePlay={() => setAnimPlaying((prev) => !prev)}
-              onSetSpeed={setAnimSpeed}
-              onResetAnimation={() => {
-                setAnimProgress(0);
-                setAnimPlaying(true);
-              }}
-              onAnimationProgress={handleAnimationProgress}
             />
           )}
         </main>

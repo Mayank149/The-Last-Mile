@@ -20,6 +20,20 @@ export interface AnimationRoute {
   pathCoords: [number, number][];
   color: string;
   type: "simulation" | "allocation";
+  travelTimeSec: number;
+}
+
+interface RouteGeometry {
+  pathCoords: [number, number][];
+  cumDistances: number[];
+  totalDist: number;
+}
+
+interface AnimatedRouteEntry {
+  geom: RouteGeometry;
+  travelTimeSec: number;
+  marker: L.Marker | null;
+  trail: L.Polyline | null;
 }
 
 interface MapViewProps {
@@ -45,10 +59,6 @@ interface MapViewProps {
     routes: boolean;
   };
   animationRoutes: AnimationRoute[];
-  animationPlaying: boolean;
-  animationSpeed: number;
-  animationProgress: number;
-  onAnimationProgress: (progress: number) => void;
 }
 
 const URGENCY_COLORS: Record<string, string> = {
@@ -74,16 +84,13 @@ export default function MapView({
   onPickLocation,
   layers,
   animationRoutes,
-  animationPlaying,
-  animationSpeed,
-  animationProgress,
-  onAnimationProgress,
 }: MapViewProps) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const mapRef = useRef<L.Map | null>(null);
   const animFrameRef = useRef<number | null>(null);
-  const animMarkersRef = useRef<Map<string, { marker: L.Marker; trail: L.Polyline }>>(new Map());
+  const animMarkersRef = useRef<Map<string, AnimatedRouteEntry>>(new Map());
   const animLayerRef = useRef<L.LayerGroup | null>(null);
+  const progressRef = useRef<number>(0);
   const layerGroupsRef = useRef<{
     zones: L.LayerGroup;
     roads: L.LayerGroup;
@@ -312,16 +319,19 @@ export default function MapView({
     }
   }, [shelters, layers.shelters]);
 
-  // Render Teams
+  // Render static markers for teams not currently animating
   useEffect(() => {
     const groups = layerGroupsRef.current;
     if (!groups) return;
     groups.teams.clearLayers();
     if (!layers.teams) return;
 
+    const animatingTeamIds = new Set(animationRoutes.map((r) => r.teamId));
+
     for (const team of teams) {
+      if (animatingTeamIds.has(team.id)) continue;
       L.circleMarker([team.coordinates.lat, team.coordinates.lon], {
-        radius: 8,
+        radius: 7,
         color: "#eff6ff",
         weight: 2,
         fillColor: team.availability === "available" ? "#3b82f6" : "#64748b",
@@ -334,7 +344,7 @@ export default function MapView({
         )
         .addTo(groups.teams);
     }
-  }, [teams, layers.teams]);
+  }, [teams, layers.teams, animationRoutes]);
 
   // Render Incidents
   useEffect(() => {
@@ -364,153 +374,182 @@ export default function MapView({
   }, [incidents, layers.incidents]);
 
   // ======== Rescue Team Motion Animation ========
-  // Helper: interpolate position along a polyline path at a given fraction [0,1]
-  const interpolateAlongPath = useCallback(
-    (pathCoords: [number, number][], fraction: number): [number, number] => {
-      if (pathCoords.length === 0) return [0, 0];
-      if (pathCoords.length === 1 || fraction <= 0) return pathCoords[0];
-      if (fraction >= 1) return pathCoords[pathCoords.length - 1];
+  const buildRouteGeometry = useCallback((pathCoords: [number, number][]): RouteGeometry => {
+    const cumDistances: number[] = [0];
+    for (let i = 1; i < pathCoords.length; i++) {
+      const [lat1, lon1] = pathCoords[i - 1];
+      const [lat2, lon2] = pathCoords[i];
+      const d = Math.hypot(lat2 - lat1, lon2 - lon1);
+      cumDistances.push(cumDistances[i - 1] + d);
+    }
+    return {
+      pathCoords,
+      cumDistances,
+      totalDist: cumDistances[cumDistances.length - 1] || 0,
+    };
+  }, []);
 
-      // Compute cumulative distances
-      const distances: number[] = [0];
-      for (let i = 1; i < pathCoords.length; i++) {
-        const [lat1, lon1] = pathCoords[i - 1];
-        const [lat2, lon2] = pathCoords[i];
-        const d = Math.sqrt((lat2 - lat1) ** 2 + (lon2 - lon1) ** 2);
-        distances.push(distances[i - 1] + d);
+  const evaluateRouteAtFraction = useCallback(
+    (
+      geom: RouteGeometry,
+      fraction: number
+    ): { pos: [number, number]; trailCoords: [number, number][] } => {
+      const { pathCoords, cumDistances, totalDist } = geom;
+      if (pathCoords.length === 0) return { pos: [0, 0], trailCoords: [] };
+      if (pathCoords.length === 1 || fraction <= 0 || totalDist === 0) {
+        return { pos: pathCoords[0], trailCoords: [pathCoords[0]] };
       }
-      const totalDist = distances[distances.length - 1];
-      if (totalDist === 0) return pathCoords[0];
+      if (fraction >= 1) {
+        return {
+          pos: pathCoords[pathCoords.length - 1],
+          trailCoords: pathCoords,
+        };
+      }
 
       const targetDist = fraction * totalDist;
+      const trailCoords: [number, number][] = [pathCoords[0]];
 
-      // Find the two points we're between
-      for (let i = 1; i < distances.length; i++) {
-        if (distances[i] >= targetDist) {
-          const segStart = distances[i - 1];
-          const segEnd = distances[i];
-          const segFraction = segEnd > segStart ? (targetDist - segStart) / (segEnd - segStart) : 0;
+      for (let i = 1; i < cumDistances.length; i++) {
+        if (cumDistances[i] < targetDist) {
+          trailCoords.push(pathCoords[i]);
+        } else {
+          const segStart = cumDistances[i - 1];
+          const segEnd = cumDistances[i];
+          const segFraction =
+            segEnd > segStart ? (targetDist - segStart) / (segEnd - segStart) : 0;
           const [lat1, lon1] = pathCoords[i - 1];
           const [lat2, lon2] = pathCoords[i];
-          return [
+          const pos: [number, number] = [
             lat1 + (lat2 - lat1) * segFraction,
             lon1 + (lon2 - lon1) * segFraction,
           ];
+          trailCoords.push(pos);
+          return { pos, trailCoords };
         }
       }
-      return pathCoords[pathCoords.length - 1];
+
+      return {
+        pos: pathCoords[pathCoords.length - 1],
+        trailCoords: pathCoords,
+      };
     },
     []
   );
 
-  // Create the team icon for animation markers
+  // Create the compact team icon for animation markers
   const createTeamIcon = useCallback((color: string, teamLabel: string) => {
     return L.divIcon({
       className: "rescue-team-motion-icon",
       html: `<div class="motion-marker-outer" style="--team-color: ${color}">
         <div class="motion-marker-ping"></div>
         <div class="motion-marker-dot">
-          <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="white" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+          <svg viewBox="0 0 24 24" width="10" height="10" fill="none" stroke="white" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
         </div>
         <div class="motion-marker-label">${teamLabel}</div>
       </div>`,
-      iconSize: [40, 54],
-      iconAnchor: [20, 44],
+      iconSize: [48, 34],
+      iconAnchor: [24, 9],
     });
   }, []);
 
-  // Animation effect: render and animate team markers along routes
+  const applyProgressToMarkers = useCallback(
+    (globalProgress: number, maxDurationSec: number) => {
+      const elapsedSec = globalProgress * maxDurationSec;
+      for (const entry of animMarkersRef.current.values()) {
+        const routeDurationSec = Math.max(entry.travelTimeSec || 120, 1);
+        const routeFraction = Math.min(Math.max(elapsedSec / routeDurationSec, 0), 1);
+        const { pos, trailCoords } = evaluateRouteAtFraction(entry.geom, routeFraction);
+        if (entry.marker) {
+          entry.marker.setLatLng(pos);
+        }
+        if (entry.trail) {
+          entry.trail.setLatLngs(trailCoords);
+        }
+      }
+    },
+    [evaluateRouteAtFraction]
+  );
+
+  // Build animation markers and route polylines only when routes or layer toggles change
   useEffect(() => {
     const map = mapRef.current;
     const animLayer = animLayerRef.current;
     if (!map || !animLayer) return;
 
-    // Clean up previous animation markers
     animLayer.clearLayers();
     animMarkersRef.current.clear();
-    if (animFrameRef.current) {
-      cancelAnimationFrame(animFrameRef.current);
-      animFrameRef.current = null;
-    }
 
     if (animationRoutes.length === 0) return;
 
-    // Create markers and trail polylines for each route
+    let maxDurationSec = 60;
     for (const route of animationRoutes) {
       if (route.pathCoords.length < 2) continue;
+      if (route.travelTimeSec > maxDurationSec) {
+        maxDurationSec = route.travelTimeSec;
+      }
 
+      const geom = buildRouteGeometry(route.pathCoords);
       const startPos = route.pathCoords[0];
       const shortName = route.teamName.split(" ")[0];
-      const icon = createTeamIcon(route.color, shortName);
 
-      const marker = L.marker([startPos[0], startPos[1]], {
-        icon,
-        zIndexOffset: 1000,
-        interactive: true,
-      })
-        .bindPopup(
-          `<strong>${route.teamName}</strong><br/>` +
-            `En route → <strong>${route.incidentLabel || route.incidentId.toUpperCase()}</strong><br/>` +
-            `<small>Type: ${route.type === "allocation" ? "Allocated Route" : "Simulated Route"}</small>`
-        )
-        .addTo(animLayer);
+      let trail: L.Polyline | null = null;
+      if (layers.routes) {
+        // Ghost path showing the full planned route (faded)
+        L.polyline(route.pathCoords, {
+          color: route.color,
+          weight: 2,
+          opacity: 0.25,
+          dashArray: "6 4",
+        }).addTo(animLayer);
 
-      // Trail polyline showing the path already traversed
-      const trail = L.polyline([], {
-        color: route.color,
-        weight: 4,
-        opacity: 0.9,
-        dashArray: undefined,
-      }).addTo(animLayer);
+        // Trail polyline showing the path already traversed
+        trail = L.polyline([startPos], {
+          color: route.color,
+          weight: 4,
+          opacity: 0.9,
+        }).addTo(animLayer);
+      }
 
-      // Ghost path showing the full planned route (faded)
-      L.polyline(route.pathCoords, {
-        color: route.color,
-        weight: 2,
-        opacity: 0.25,
-        dashArray: "6 4",
-      }).addTo(animLayer);
+      let marker: L.Marker | null = null;
+      if (layers.teams) {
+        const icon = createTeamIcon(route.color, shortName);
+        marker = L.marker([startPos[0], startPos[1]], {
+          icon,
+          zIndexOffset: 1000,
+          interactive: true,
+        })
+          .bindPopup(
+            `<strong>${route.teamName}</strong><br/>` +
+              `En route → <strong>${route.incidentLabel || route.incidentId.toUpperCase()}</strong><br/>` +
+              `<small>Modelled ETA: ${Math.round(route.travelTimeSec)}s · ${
+                route.type === "allocation" ? "Allocated Route" : "Simulated Route"
+              }</small>`
+          )
+          .addTo(animLayer);
+      }
 
-      animMarkersRef.current.set(route.teamId + "-" + route.incidentId, {
+      animMarkersRef.current.set(`${route.teamId}-${route.incidentId}-${route.type}`, {
+        geom,
+        travelTimeSec: route.travelTimeSec || 120,
         marker,
         trail,
       });
     }
 
-    // Position all markers at the current progress
-    for (const route of animationRoutes) {
-      if (route.pathCoords.length < 2) continue;
-      const key = route.teamId + "-" + route.incidentId;
-      const entry = animMarkersRef.current.get(key);
-      if (!entry) continue;
-      const pos = interpolateAlongPath(route.pathCoords, animationProgress);
-      entry.marker.setLatLng([pos[0], pos[1]]);
+    applyProgressToMarkers(progressRef.current, maxDurationSec);
+  }, [
+    animationRoutes,
+    layers.teams,
+    layers.routes,
+    buildRouteGeometry,
+    createTeamIcon,
+    applyProgressToMarkers,
+  ]);
 
-      // Build trail up to the current progress
-      const trailCoords: [number, number][] = [];
-      const distances: number[] = [0];
-      for (let i = 1; i < route.pathCoords.length; i++) {
-        const [lat1, lon1] = route.pathCoords[i - 1];
-        const [lat2, lon2] = route.pathCoords[i];
-        distances.push(distances[i - 1] + Math.sqrt((lat2 - lat1) ** 2 + (lon2 - lon1) ** 2));
-      }
-      const totalDist = distances[distances.length - 1];
-      const targetDist = animationProgress * totalDist;
-      for (let i = 0; i < route.pathCoords.length; i++) {
-        if (distances[i] <= targetDist) {
-          trailCoords.push(route.pathCoords[i]);
-        } else {
-          break;
-        }
-      }
-      trailCoords.push(pos);
-      entry.trail.setLatLngs(trailCoords);
-    }
-  }, [animationRoutes, animationProgress, createTeamIcon, interpolateAlongPath]);
-
-  // Animation loop: smoothly advance progress when playing
+  // Animation loop: smoothly advance in 1:1 real-time pace based on modelled travelTimeSec
   useEffect(() => {
-    if (!animationPlaying || animationRoutes.length === 0) {
+    if (animationRoutes.length === 0) {
+      progressRef.current = 0;
       if (animFrameRef.current) {
         cancelAnimationFrame(animFrameRef.current);
         animFrameRef.current = null;
@@ -518,19 +557,26 @@ export default function MapView({
       return;
     }
 
+    progressRef.current = 0;
+    const maxDurationSec = animationRoutes.reduce(
+      (max, r) => Math.max(max, r.travelTimeSec || 120),
+      60
+    );
+    const totalDurationMs = maxDurationSec * 1000;
+    applyProgressToMarkers(0, maxDurationSec);
+
     let lastTime: number | null = null;
-    const TOTAL_DURATION_MS = 15000; // base duration for one full cycle
 
     const tick = (now: number) => {
       if (lastTime !== null) {
         const dt = now - lastTime;
-        const increment = (dt / TOTAL_DURATION_MS) * animationSpeed;
-        const newProgress = animationProgress + increment;
-        if (newProgress >= 1) {
-          onAnimationProgress(0); // Loop
-        } else {
-          onAnimationProgress(newProgress);
+        const increment = dt / totalDurationMs;
+        let next = progressRef.current + increment;
+        if (next >= 1) {
+          next = 0;
         }
+        progressRef.current = next;
+        applyProgressToMarkers(next, maxDurationSec);
       }
       lastTime = now;
       animFrameRef.current = requestAnimationFrame(tick);
@@ -544,7 +590,7 @@ export default function MapView({
         animFrameRef.current = null;
       }
     };
-  }, [animationPlaying, animationSpeed, animationRoutes.length, animationProgress, onAnimationProgress]);
+  }, [animationRoutes, applyProgressToMarkers]);
 
   return (
     <div className="map-container">
