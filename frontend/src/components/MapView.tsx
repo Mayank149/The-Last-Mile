@@ -111,7 +111,18 @@ export default function MapView({
 
     mapRef.current = map;
 
+    // Invalidate size immediately and when container resizes
+    const observer = new ResizeObserver(() => {
+      map.invalidateSize();
+    });
+    observer.observe(containerRef.current);
+    const timer = setTimeout(() => {
+      map.invalidateSize();
+    }, 150);
+
     return () => {
+      observer.disconnect();
+      clearTimeout(timer);
       map.remove();
       mapRef.current = null;
       layerGroupsRef.current = null;
